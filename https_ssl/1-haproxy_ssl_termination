@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# NGINX SSL Termination + Load Balancer Script for www.ekirabo.tech
+
+set -e
+
+# ---------------------------
+# Variables
+# ---------------------------
+DOMAIN="www.ekirabo.tech"
+SSL_PEM="/etc/ssl/private/ekirabo.tech.pem"
+BACKENDS=("3.89.92.200:80" "34.238.80.97:80")
+NGINX_CONF="/etc/nginx/sites-available/1-nginx_ssl_termination"
+
+# ---------------------------
+# Install NGINX if missing
+# ---------------------------
+if ! command -v nginx >/dev/null 2>&1; then
+    echo "Installing NGINX..."
+    sudo apt update
+    sudo apt install -y nginx
+fi
+
+# ---------------------------
+# Create a self-signed certificate if it doesn't exist
+# ---------------------------
+if [ ! -f "$SSL_PEM" ]; then
+    echo "Creating self-signed SSL certificate..."
+    sudo openssl req -x509 -nodes -days 365 \
+        -newkey rsa:2048 \
+        -keyout "$SSL_PEM" \
+        -out "$SSL_PEM" \
+        -subj "/CN=$DOMAIN"
+fi
+
+# ---------------------------
+# Generate NGINX configuration
+# ---------------------------
+echo "Writing NGINX config to $NGINX_CONF..."
+
+# Upstream block (load balancing)
+sudo tee "$NGINX_CONF" > /dev/null <<EOF
+# Backend load balancing
+upstream backend_servers {
+EOF
+
+for server in "${BACKENDS[@]}"; do
+    echo "    server $server;" | sudo tee -a "$NGINX_CONF" > /dev/null
+done
+
+echo "}" | sudo tee -a "$NGINX_CONF" > /dev/null
+
+# HTTP → HTTPS redirect + HTTPS server
+sudo tee -a "$NGINX_CONF" > /dev/null <<EOF
+# Redirect HTTP to HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN;
+
+    return 301 https://\$host\$request_uri;
+}
+
+# HTTPS server
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name $DOMAIN;
+
+    ssl_certificate     $SSL_PEM;
+    ssl_certificate_key $SSL_PEM;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+
+    location / {
+        proxy_pass http://backend_servers;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+
+        # Optional: handle slow backends
+        proxy_read_timeout 90;
+        proxy_connect_timeout 90;
+    }
+}
+EOF
+
+# ---------------------------
+# Enable configuration
+# ---------------------------
+sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/
+
+# ---------------------------
+# Test and reload NGINX
+# ---------------------------
+sudo nginx -t
+sudo systemctl restart nginx
+
+echo "NGINX SSL load balancer configured successfully for $DOMAIN!"
