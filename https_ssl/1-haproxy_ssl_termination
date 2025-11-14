@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # NGINX SSL Termination + Load Balancer Script for www.ekirabo.tech
+# Passes HTTP health check on /health
 
 set -e
 
@@ -49,15 +50,23 @@ done
 
 echo "}" | sudo tee -a "$NGINX_CONF" > /dev/null
 
-# HTTP → HTTPS redirect + HTTPS server
+# HTTP → HTTPS redirect + health check
 sudo tee -a "$NGINX_CONF" > /dev/null <<EOF
-# Redirect HTTP to HTTPS
+# HTTP server
 server {
     listen 80;
     listen [::]:80;
     server_name $DOMAIN;
 
-    return 301 https://\$host\$request_uri;
+    # Health check endpoint
+    location /health {
+        return 200 "OK\n";
+    }
+
+    # Redirect everything else to HTTPS
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
 }
 
 # HTTPS server
@@ -98,3 +107,4 @@ sudo nginx -t
 sudo systemctl restart nginx
 
 echo "NGINX SSL load balancer configured successfully for $DOMAIN!"
+echo "HTTP /health endpoint returns 200 OK for health checks."
