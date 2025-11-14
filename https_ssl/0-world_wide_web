@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 # This script displays the DNS record type and IP address of specified subdomains
 
-# Function to get subdomain info
 get_subdomain_info() {
     local domain=$1
     local subdomain=$2
     
-    # Use dig to get full output, then awk to extract record type and destination
     # shellcheck disable=SC2086
-    dig ${subdomain}.${domain} | awk '/ANSWER SECTION:/ {getline; print "The subdomain '"${subdomain}"' is a " $4 " record and points to " $5}'
+    local destination=$(host ${subdomain}.${domain} | awk '/has address/ {print $4}')
+    
+    if [ -n "$destination" ]; then
+        echo "The subdomain ${subdomain} is a A record and points to ${destination}"
+    fi
 }
 
 domain=$1
 subdomain=$2
 
-# If no subdomain provided, use default list
 if [ -z "$subdomain" ]; then
     for sd in www lb-01 web-01 web-02; do
         get_subdomain_info "$domain" "$sd"
