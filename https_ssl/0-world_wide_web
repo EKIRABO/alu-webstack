@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+#display information about subdomains
 DOMAIN="$1"
 SUBDOMAIN="$2"
 
