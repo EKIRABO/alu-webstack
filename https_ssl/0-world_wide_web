@@ -6,7 +6,7 @@ get_subdomain_info() {
     local subdomain=$2
     
     # shellcheck disable=SC2086
-    local destination=$(host ${subdomain}.${domain} | awk '/has address/ {print $4}')
+    local destination=$(getent hosts ${subdomain}.${domain} | awk '{print $1}')
     
     if [ -n "$destination" ]; then
         echo "The subdomain ${subdomain} is a A record and points to ${destination}"
