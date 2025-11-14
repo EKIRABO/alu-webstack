@@ -16,8 +16,7 @@ get_record() {
     fi
     
     local record_type="A"
-
-    echo "The subdomain ${full%%.*} is a $record_type record and points to $dig_ip"
+echo "The subdomain ${full%%.*} is a $record_type record and points to $dig_ip"
 }
 
 if [ -n "$SUBDOMAIN" ]; then
