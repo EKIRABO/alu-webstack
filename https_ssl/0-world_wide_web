@@ -1,28 +1,30 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2086
 
-domain=$1
-subdomain=$2
+DOMAIN="$1"
+SUBDOMAIN="$2"
 
-get_info() {
-    local full="$1.$domain"
+get_record() {
+    local full="$1"
+    
+    # Try dig first
+    local dig_ip
+    dig_ip=$(dig +short "$full" | awk 'NR==1')
+    
+    # If dig returns nothing, fallback to /etc/hosts
+    if [ -z "$dig_ip" ]; then
+        dig_ip=$(grep " $full" /etc/hosts | awk '{print $1}')
+    fi
+    
+    local record_type="A"
 
-    # Run dig and extract the ANSWER record using awk
-    result=$(dig $full | awk '/ANSWER SECTION:/ {getline; print}')
-
-    record_type=$(echo $result | awk '{print $4}')
-    destination=$(echo $result | awk '{print $5}')
-
-    echo "The subdomain $1 is a $record_type record and points to $destination"
+    echo "The subdomain ${full%%.*} is a $record_type record and points to $dig_ip"
 }
 
-# If only the domain is provided → check all 4 subdomains
-if [ -z "$subdomain" ]; then
-    get_info "www"
-    get_info "lb-01"
-    get_info "web-01"
-    get_info "web-02"
+if [ -n "$SUBDOMAIN" ]; then
+    get_record "$SUBDOMAIN.$DOMAIN"
 else
-    # If domain + subdomain provided → check only that subdomain
-    get_info "$subdomain"
+    for sub in www lb-01 web-01 web-02
+    do
+        get_record "$sub.$DOMAIN"
+    done
 fi
